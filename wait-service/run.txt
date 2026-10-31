@@ -1,0 +1,2 @@
+1. Virtual env already included in zip file so after navigating to wait-service folder  .\.venv\Scripts\Activate.ps1
+2. py app.py
