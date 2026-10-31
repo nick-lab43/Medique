@@ -1,95 +1,36 @@
-========================================================================
-                     MEDIQUEUE SA - FINAL PROJECT
-          Intelligent Healthcare Triage & Virtual Queuing Platform
-========================================================================
+# MediQueue SA
 
-QUICK START INSTRUCTIONS (FOR YOU & YOUR FRIENDS)
-------------------------------------------------------------------------
+Student/demo project for healthcare triage support and virtual queue management.
 
-REQUIREMENTS:
-- XAMPP (Apache + MySQL) installed on Windows, macOS, or Linux.
-  Download from: https://www.apachefriends.org/
+## Components
+- PHP website and API
+- MySQL/MariaDB database
+- Optional Flask triage and wait-time prediction services
+- Built-in PHP fallback logic, so the main application runs without Python services
 
-------------------------------------------------------------------------
-STEP-BY-STEP SETUP:
-------------------------------------------------------------------------
+The included model data is synthetic prototype material. This project is not clinically validated and must not be used for real clinical decisions or real patient records.
 
-1. PLACE FOLDER IN XAMPP HTDOCS:
-   Copy or move this entire "MEDIQUEUE FINAL PROJECT" folder into your 
-   XAMPP web directory:
-   - On Windows: C:\xampp\htdocs\MEDIQUEUE FINAL PROJECT
-   - On Mac: /Applications/XAMPP/htdocs/MEDIQUEUE FINAL PROJECT
-   - On Linux: /opt/lampp/htdocs/MEDIQUEUE FINAL PROJECT
+## Run locally with XAMPP
+1. Copy the project folder into XAMPP's `htdocs` directory.
+2. Start Apache and MySQL.
+3. In phpMyAdmin, create a database named `mediqueue_sa` and select it.
+4. Import `schema.sql` into that selected database.
+5. Default local database settings are `localhost`, database `mediqueue_sa`, user `root`, blank password. If your setup differs, copy `config.example.php` to `config.local.php` and edit it.
+6. Register a patient account or sign in, then open `http://localhost/MEDIQUEUE%20FINAL%20PROJECT/` or `main.php`.
 
-2. START APACHE & MYSQL:
-   - Open the XAMPP Control Panel.
-   - Click "Start" next to Apache.
-   - Click "Start" next to MySQL.
+Import the schema once through phpMyAdmin. The app no longer creates a database or reruns schema changes on every request.
 
-3. AUTOMATIC DATABASE SETUP:
-   - You DO NOT need to manually configure MySQL!
-   - MediQueue SA automatically detects if the database exists on first load.
-   - When you open the application, db.php will automatically create the 
-     "mediqueue_sa" database, generate all 10 relational tables, and seed 
-     the 12 Durban regional hospitals and 24 medical officers.
-   - (Optional manual import): If you prefer using phpMyAdmin, you can import
-     the included "schema.sql" file directly into MySQL.
+## Free hosting
+Follow [DEPLOY_FREE.md](DEPLOY_FREE.md) for a zero-cost demonstration deployment using PHP/MySQL hosting. Python services are optional and remain disabled until their URLs are configured.
 
-4. OPEN THE APPLICATION IN YOUR BROWSER:
-   Navigate to any of the following URLs:
+## Optional Python services
+From the corresponding service directory, install its `requirements.txt` and run `python app.py`. The triage service listens on port 5002 locally; the wait-time service listens on port 5001 locally.
 
-   * MAIN LANDING PAGE & VIRTUAL GATEWAY:
-     http://localhost/MEDIQUEUE%20FINAL%20PROJECT/main.php
+If hosted separately, set `triage_service_url` and/or `wait_service_url` in the untracked `config.local.php` file to the service's base HTTPS URL, without an endpoint path. The PHP API appends `/predict_urgency` and `/predict_wait`.
 
-   * PATIENT PORTAL (Sign In):
-     http://localhost/MEDIQUEUE%20FINAL%20PROJECT/login.php
-
-   * PATIENT REGISTRATION:
-     http://localhost/MEDIQUEUE%20FINAL%20PROJECT/register.php
-
-   * DOCTOR CLINICAL WORKSPACE:
-     http://localhost/MEDIQUEUE%20FINAL%20PROJECT/doctor.php
-
-   * ADMIN HEALTH ANALYTICS:
-     http://localhost/MEDIQUEUE%20FINAL%20PROJECT/admin.php
-
-   * ROLE SELECTOR:
-     http://localhost/MEDIQUEUE%20FINAL%20PROJECT/indexmedi.php
-
-------------------------------------------------------------------------
-DEMO CREDENTIALS:
-------------------------------------------------------------------------
-
-1. PATIENT ACCOUNT:
-   - Email: patient1@mediqueue.local
-   - Password: password
-   - Or click "Register" on register.php to create your own account instantly.
-
-2. DOCTOR WORKSPACE:
-   - Go to: http://localhost/MEDIQUEUE%20FINAL%20PROJECT/doctor.php
-   - Select a facility (e.g., Addington Hospital) and your practitioner name
-     (e.g., Dr. Thabo Mokoena) from the dropdowns to start consulting.
-
-3. ADMIN ANALYTICS:
-   - Go to: http://localhost/MEDIQUEUE%20FINAL%20PROJECT/admin.php
-   - View real-time KPI metrics, triage breakdowns, and case distributions.
-
-------------------------------------------------------------------------
-OPTIONAL PYTHON AI MICROSERVICES:
-------------------------------------------------------------------------
-The core PHP API (api.php) has robust built-in algorithmic fallback logic 
-for symptom triage scoring and queue wait times, so the app runs 100% 
-out-of-the-box without Python.
-
-If you also wish to launch the optional machine learning Flask microservices:
-1. Open a terminal in the "triage-service" folder:
-   pip install -r requirements.txt
-   python app.py  (runs on port 5002)
-
-2. Open a terminal in the "wait-service" folder:
-   pip install -r requirements.txt
-   python app.py  (runs on port 5001)
-
-========================================================================
-Developed for MediQueue SA - Republic of South Africa
-========================================================================
+## Demo and security
+- The SQL schema seeds demonstration records. Demo credentials are public and are not secure accounts.
+- Patient API guest mode is disabled by default because looking up a patient by ID can impersonate that patient. Keep it disabled on any internet-accessible site.
+- The doctor/admin workspaces and some staff API actions still lack complete role-based authentication. Do not use this public demo with real patient data.
+- Never commit `config.local.php`, passwords, API keys, or real patient information.
+- Use synthetic data only. This project is not production-ready for sensitive health data.

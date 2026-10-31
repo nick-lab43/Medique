@@ -17,11 +17,9 @@ date_default_timezone_set("Africa/Johannesburg");
 session_start();
 require_once __DIR__ . "/db.php";
 
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-
+// UI and API share an origin; do not enable arbitrary cross-origin access.
 if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+    http_response_code(204);
     exit;
 }
 
@@ -54,11 +52,13 @@ function jsonResponse($data, $status = 200)
 */
 
 set_exception_handler(function (Throwable $e) {
+    error_log(sprintf("[MediQueue API] Unhandled exception: %s in %s:%d",
+        $e->getMessage(), $e->getFile(), $e->getLine()));
     http_response_code(500);
     header("Content-Type: application/json; charset=utf-8");
     echo json_encode([
         "success" => false,
-        "error" => "Server error: " . $e->getMessage()
+        "error" => "An internal server error occurred."
     ]);
     exit;
 });
@@ -88,7 +88,7 @@ function getInput()
 
 function requirePatientApi()
 {
-    global $pdo;
+    global $pdo, $mediqueueConfig;
 
     if (!empty($_SESSION["user_id"]) && ($_SESSION["role"] ?? "") === "patient") {
         $stmt = $pdo->prepare("SELECT p.id, p.user_id, p.full_name FROM patients p WHERE p.user_id = ? LIMIT 1");
@@ -98,6 +98,12 @@ function requirePatientApi()
             $_SESSION["patient_id"] = (int)$patient["id"];
             return $patient;
         }
+    }
+
+    // Guest identity lookup can impersonate existing patients. It is disabled
+    // by default and should only be enabled for isolated local demos.
+    if (!filter_var($mediqueueConfig["allow_guest_patient_api"] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+        jsonResponse(["error" => "Patient login is required."], 401);
     }
 
     // Support direct API requests from the main.php landing page
@@ -177,39 +183,32 @@ function requirePatientApi()
 
 function get_estimated_wait($payload)
 {
-    $ch = curl_init("http://localhost:5001/predict_wait");
-
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-    curl_setopt($ch, CURLOPT_TIMEOUT, 3); // fail fast, don't block the queue view
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 1);
-
-    $response = curl_exec($ch);
-    curl_close($ch);
-
-    if ($response !== false) {
-        $data = json_decode($response, true);
-
-        if (isset($data["estimated_wait_minutes"])) {
-            return (float)$data["estimated_wait_minutes"];
+    global $mediqueueConfig;
+    $base = trim((string)($mediqueueConfig["wait_service_url"] ?? ""));
+    if ($base !== "" && function_exists("curl_init")) {
+        $ch = curl_init(rtrim($base, "/") . "/predict_wait");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+        $response = curl_exec($ch);
+        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($response !== false && $status >= 200 && $status < 300) {
+            $data = json_decode($response, true);
+            if (is_array($data) && isset($data["estimated_wait_minutes"]) && is_numeric($data["estimated_wait_minutes"])) {
+                return max(1.0, (float)$data["estimated_wait_minutes"]);
+            }
         }
     }
-
-    /*
-    | Prediction service unavailable — fall back to a simple estimate
-    | (relevant patients ahead / doctors on duty * average consult time)
-    | rather than showing nothing.
-    */
-
+    // No Python URL configured or service unavailable: use the PHP fallback.
     $doctors = max(1, (int)($payload["doctors_on_duty"] ?? 1));
     $avgMinutes = (float)($payload["doctor_avg_consultation_minutes"] ?? 15);
     $ahead = (int)($payload["patients_ahead_same_or_higher_urgency"] ?? 0);
-
-    return round(($ahead / $doctors) * $avgMinutes, 1);
+    return max(1.0, round(($ahead / $doctors) * $avgMinutes, 1));
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -265,57 +264,40 @@ function fallback_triage_urgency($symptoms)
 
 function get_triage_prediction($symptoms)
 {
-    $ch = curl_init("http://localhost:5002/predict_urgency");
-
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
-        "symptoms" => $symptoms
-    ]));
-    curl_setopt($ch, CURLOPT_TIMEOUT, 3);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 1);
-
-    $response = curl_exec($ch);
-    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($response !== false) {
-        $data = json_decode($response, true);
-
-        if (
-            $httpCode === 422
-            && is_array($data)
-            && ($data["code"] ?? "") === "invalid_symptom_description"
-        ) {
-            return [
-                "urgency" => null,
-                "source" => "input_rejected",
-                "confidence" => null,
-                "needs_review" => false,
-                "error" => $data["error"] ?? "Please enter a clear symptom description."
-            ];
-        }
-
-        if (
-            $httpCode >= 200
-            && $httpCode < 300
-            && is_array($data)
-            && isset($data["urgency"])
-            && in_array($data["urgency"], ["Low", "Moderate", "High"], true)
-        ) {
-            return [
-                "urgency" => $data["urgency"],
-                "source" => "ai_service",
-                "confidence" => isset($data["confidence"])
-                    ? (float)$data["confidence"]
-                    : null,
-                "needs_review" => (bool)($data["needs_review"] ?? false),
-                "error" => null
-            ];
+    global $mediqueueConfig;
+    $base = trim((string)($mediqueueConfig["triage_service_url"] ?? ""));
+    if ($base !== "" && function_exists("curl_init")) {
+        $ch = curl_init(rtrim($base, "/") . "/predict_urgency");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(["symptoms" => $symptoms]));
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+        $response = curl_exec($ch);
+        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($response !== false) {
+            $data = json_decode($response, true);
+            if ($status === 422 && is_array($data) && ($data["code"] ?? "") === "invalid_symptom_description") {
+                return [
+                    "urgency" => null, "source" => "input_rejected",
+                    "confidence" => null, "needs_review" => false,
+                    "error" => $data["error"] ?? "Please enter a clear symptom description."
+                ];
+            }
+            if ($status >= 200 && $status < 300 && is_array($data)
+                && isset($data["urgency"])
+                && in_array($data["urgency"], ["Low", "Moderate", "High"], true)) {
+                return [
+                    "urgency" => $data["urgency"], "source" => "ai_service",
+                    "confidence" => isset($data["confidence"]) ? (float)$data["confidence"] : null,
+                    "needs_review" => (bool)($data["needs_review"] ?? false),
+                    "error" => null
+                ];
+            }
         }
     }
-
     return [
         "urgency" => fallback_triage_urgency($symptoms),
         "source" => "keyword_fallback",
@@ -341,7 +323,7 @@ if (
         "success" => true,
         "service" => "MediQueue SA API",
         "owner" => "Ethan Naidoo",
-        "database" => "mediqueue_sa",
+        "database" => $mediqueueConfig["db_name"],
         "live_updates" => "Server-Sent Events"
     ]);
 }
