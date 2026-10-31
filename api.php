@@ -86,6 +86,63 @@ function getInput()
     return $cached;
 }
 
+function enforceStaffApiAuthorization()
+{
+    global $pdo;
+    $route = (string)($_GET['route'] ?? '');
+    $doctorRoutes = [
+        'queue_call_patient', 'queue_next', 'queue_complete', 'queue_refer',
+        'doctor_stats', 'prescription_create', 'doctor_referral_hospitals'
+    ];
+    $adminRoutes = ['admin_stats'];
+
+    if (!in_array($route, $doctorRoutes, true) && !in_array($route, $adminRoutes, true)) return;
+
+    $userId = (int)($_SESSION['user_id'] ?? 0);
+    $role = (string)($_SESSION['role'] ?? '');
+    if ($userId <= 0 || !in_array($role, ['doctor', 'admin'], true)) {
+        jsonResponse(['error' => 'Staff authentication is required.'], 401);
+    }
+
+    $userStmt = $pdo->prepare('SELECT id, role FROM users WHERE id = ? LIMIT 1');
+    $userStmt->execute([$userId]);
+    $user = $userStmt->fetch();
+    if (!$user || $user['role'] !== $role) jsonResponse(['error' => 'Staff authentication is required.'], 401);
+
+    if (in_array($route, $adminRoutes, true)) {
+        if ($role !== 'admin') jsonResponse(['error' => 'Administrator access is required.'], 403);
+        return;
+    }
+    if ($role !== 'doctor') jsonResponse(['error' => 'Doctor access is required.'], 403);
+
+    $doctorStmt = $pdo->prepare('SELECT id, hospital_id FROM doctors WHERE user_id = ? LIMIT 1');
+    $doctorStmt->execute([$userId]);
+    $doctor = $doctorStmt->fetch();
+    if (!$doctor) jsonResponse(['error' => 'Doctor account is not configured.'], 403);
+
+    $input = getInput();
+    $doctorId = (int)$doctor['id'];
+    $requestedDoctorId = (int)($_GET['doctor_id'] ?? $input['doctor_id'] ?? 0);
+    if ($requestedDoctorId > 0 && $requestedDoctorId !== $doctorId) {
+        jsonResponse(['error' => 'You cannot act on behalf of another doctor.'], 403);
+    }
+    $requestedHospitalId = (int)($_GET['hospital_id'] ?? $input['hospital_id'] ?? 0);
+    if ($requestedHospitalId > 0 && $requestedHospitalId !== (int)$doctor['hospital_id']) {
+        jsonResponse(['error' => 'You cannot access another hospital.'], 403);
+    }
+
+    $queueId = (int)($_GET['queue_id'] ?? $input['queue_id'] ?? 0);
+    if ($queueId > 0 && in_array($route, ['queue_complete', 'queue_refer', 'prescription_create', 'doctor_referral_hospitals'], true)) {
+        $queueStmt = $pdo->prepare('SELECT id FROM queue_entries WHERE id = ? AND doctor_id = ? LIMIT 1');
+        $queueStmt->execute([$queueId, $doctorId]);
+        if (!$queueStmt->fetch()) jsonResponse(['error' => 'Queue entry not found for this doctor.'], 403);
+    }
+    $_SESSION['doctor_id'] = $doctorId;
+    $_SESSION['hospital_id'] = (int)$doctor['hospital_id'];
+}
+
+enforceStaffApiAuthorization();
+
 function requirePatientApi()
 {
     global $pdo, $mediqueueConfig;

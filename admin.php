@@ -1,3 +1,7 @@
+<?php
+require_once __DIR__ . '/auth_common.php';
+require_admin_page();
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
