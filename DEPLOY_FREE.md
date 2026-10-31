@@ -18,6 +18,7 @@ The SQL file must be imported into the database already created by the host. Do 
 5. Edit `config.local.php` with the exact database settings from the hosting control panel. Do not use local XAMPP credentials.
 6. Never upload `config.local.php` to GitHub; `.gitignore` excludes it.
 7. Open the free subdomain. `index.php` redirects to `main.php`.
+8. Register a patient account or sign in before submitting patient-specific triage/queue requests. Keep `allow_guest_patient_api` set to `false`.
 
 If a database error appears, verify the database settings and confirm that `schema.sql` was imported into the same database. Do not publish credentials in screenshots or chat.
 
@@ -39,6 +40,7 @@ If you later deploy Flask services separately, set `triage_service_url` and `wai
 If a test fails, capture the exact visible error and inspect the hosting PHP error log. Never share hosting credentials.
 
 ## Important limitations
+- This repository is not ready for real patient data: the doctor/admin workspaces and some staff API actions do not yet enforce complete role-based authentication. Treat the site as a public synthetic-data demonstration only.
 - Free hosting has quotas and may change its policies. Do not start a paid trial, enter payment details, or upgrade.
 - The schema seeds demonstration users and hospital data. Demo credentials are public.
 - The training datasets are synthetic and the models are not clinically validated.

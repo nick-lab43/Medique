@@ -17,6 +17,8 @@ $mediqueueConfig = array_merge([
     "db_password" => "",
     "wait_service_url" => "",
     "triage_service_url" => "",
+    // Identity-by-number guest mode is unsafe; enable only for isolated local demos.
+    "allow_guest_patient_api" => false,
 ], $localConfig);
 $environmentMap = [
     "MEDIQUEUE_DB_HOST" => "db_host",
@@ -26,6 +28,7 @@ $environmentMap = [
     "MEDIQUEUE_DB_PASSWORD" => "db_password",
     "MEDIQUEUE_WAIT_SERVICE_URL" => "wait_service_url",
     "MEDIQUEUE_TRIAGE_SERVICE_URL" => "triage_service_url",
+    "MEDIQUEUE_ALLOW_GUEST_PATIENT_API" => "allow_guest_patient_api",
 ];
 foreach ($environmentMap as $environmentName => $configKey) {
     $environmentValue = getenv($environmentName);

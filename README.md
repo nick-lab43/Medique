@@ -16,7 +16,7 @@ The included model data is synthetic prototype material. This project is not cli
 3. In phpMyAdmin, create a database named `mediqueue_sa` and select it.
 4. Import `schema.sql` into that selected database.
 5. Default local database settings are `localhost`, database `mediqueue_sa`, user `root`, blank password. If your setup differs, copy `config.example.php` to `config.local.php` and edit it.
-6. Open `http://localhost/MEDIQUEUE%20FINAL%20PROJECT/` or `main.php`.
+6. Register a patient account or sign in, then open `http://localhost/MEDIQUEUE%20FINAL%20PROJECT/` or `main.php`.
 
 Import the schema once through phpMyAdmin. The app no longer creates a database or reruns schema changes on every request.
 
@@ -30,5 +30,7 @@ If hosted separately, set `triage_service_url` and/or `wait_service_url` in the 
 
 ## Demo and security
 - The SQL schema seeds demonstration records. Demo credentials are public and are not secure accounts.
+- Patient API guest mode is disabled by default because looking up a patient by ID can impersonate that patient. Keep it disabled on any internet-accessible site.
+- The doctor/admin workspaces and some staff API actions still lack complete role-based authentication. Do not use this public demo with real patient data.
 - Never commit `config.local.php`, passwords, API keys, or real patient information.
 - Use synthetic data only. This project is not production-ready for sensitive health data.

@@ -7,7 +7,7 @@ MEDIQUEUE SA — LOCAL SETUP
 5. Default XAMPP settings are localhost / mediqueue_sa / root / blank password.
    If your database settings differ, copy config.example.php to config.local.php
    and edit it. Never commit config.local.php to GitHub.
-6. Open http://localhost/MEDIQUEUE%20FINAL%20PROJECT/ or main.php.
+6. Register a patient account or sign in, then open http://localhost/MEDIQUEUE%20FINAL%20PROJECT/ or main.php.
 
 Import schema.sql once through phpMyAdmin. db.php does not create the database
 or rerun schema changes on every request.
@@ -19,5 +19,6 @@ requirements.txt and run python app.py from that service's directory.
 For zero-cost shared PHP/MySQL hosting, follow DEPLOY_FREE.md.
 
 This is a student/demo application. The model datasets are synthetic and not
-clinically validated. Do not use real patient data. Never commit config.local.php
-or hosting credentials.
+clinically validated. The doctor/admin workspaces and some staff API actions do
+not yet enforce complete role-based authentication. Do not use real patient
+data. Never commit config.local.php or hosting credentials.

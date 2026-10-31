@@ -88,7 +88,7 @@ function getInput()
 
 function requirePatientApi()
 {
-    global $pdo;
+    global $pdo, $mediqueueConfig;
 
     if (!empty($_SESSION["user_id"]) && ($_SESSION["role"] ?? "") === "patient") {
         $stmt = $pdo->prepare("SELECT p.id, p.user_id, p.full_name FROM patients p WHERE p.user_id = ? LIMIT 1");
@@ -98,6 +98,12 @@ function requirePatientApi()
             $_SESSION["patient_id"] = (int)$patient["id"];
             return $patient;
         }
+    }
+
+    // Guest identity lookup can impersonate existing patients. It is disabled
+    // by default and should only be enabled for isolated local demos.
+    if (!filter_var($mediqueueConfig["allow_guest_patient_api"] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+        jsonResponse(["error" => "Patient login is required."], 401);
     }
 
     // Support direct API requests from the main.php landing page
@@ -317,7 +323,7 @@ if (
         "success" => true,
         "service" => "MediQueue SA API",
         "owner" => "Ethan Naidoo",
-        "database" => "mediqueue_sa",
+        "database" => $mediqueueConfig["db_name"],
         "live_updates" => "Server-Sent Events"
     ]);
 }
